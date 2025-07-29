@@ -10,6 +10,6 @@
     "db_port": "5432",
     "db_user": "urlshortner",
     "db_name": "url-shrtner",
-    "server_port": "8080"
+    "db_password": "123"
   }
 }
