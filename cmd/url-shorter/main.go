@@ -23,7 +23,7 @@ func main() {
 	servConf := cfg.HTTPServer
 
 	logger := setupLogger(cfg.Env)
-	logger.Info("logger is settup")
+	logger.Info("logger is settuped")
 
     // Подключаемся к БД
     db, err := store.NewDBConnection(&cfg.Storage)
@@ -39,11 +39,11 @@ func main() {
 	logger.Info("shortener-Service was successfuly created")
 	
 	logger.Info("Trying to connect to server")
+
 	server := server.New(servConf.Address, shortService)
-	server.Start()
-	// if err := server.Start(); err != nil {
-	// 	logger.Info("An error occurred while starting the server", "error", err)
-	// }
+	if err := server.Start(); err != nil {
+		logger.Info("An error occurred while starting the server", "error", err)
+	}
 	logger.Info("server started successfully on", "adres", servConf.Address)
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"url-shorter/internal/config"
 
 	pgerr "github.com/jackc/pgerrcode"
@@ -56,27 +57,25 @@ func (db *DbManager) SaveUser(ctx context.Context, mail, password string) error 
 	return nil
 }
 
-func (db *DbManager) SaveUrl(ctx context.Context, shortCode, longUrl, mail string) (int64, error) {
-	query := `
-        INSERT INTO urls (short_code, original_url, user_mail, created_at)
-        VALUES ($1, $2, $3, NOW())
-        RETURNING id
+func (db *DbManager) SaveUrl(ctx context.Context, shortCode, longUrl string) (int64, error) {
+    query := `
+      INSERT INTO urls (short_code, original_url, created_at)
+      VALUES ($1, $2, NOW())
+      RETURNING id
     `
-	var id int64
-	err := db.conn.QueryRow(ctx, query, shortCode, longUrl, mail).Scan(&id)
-	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == pgerr.UniqueViolation {
-			return -1, ErrShortURLExists
-		}
-
-		if errors.As(err, &pgErr) && pgErr.Code == pgerr.ForeignKeyViolation {
-			return -1, fmt.Errorf("link was created, but %w", ErrUserNotFound)
-		} // на самом деле это так потренироваться больше
-		return -1, fmt.Errorf("error while adding URL: %w", err)
-	}
-	return id, nil
+    var id int64
+    err := db.conn.QueryRow(ctx, query, shortCode, longUrl).Scan(&id)
+    if err != nil {
+        var pgErr *pgconn.PgError
+        if errors.As(err, &pgErr) && pgErr.Code == pgerr.UniqueViolation {
+            return -1, ErrShortURLExists
+        }
+        return -1, fmt.Errorf("error while adding URL: %w", err)
+    }
+	slog.Info("url was saved", "url", longUrl, "alias", shortCode)
+    return id, nil
 }
+
 
 // GetURL возвращает original_url из таблицы urls по переданному short_code.
 // Если записи с таким alias нет — возвращает ErrShortURLNotFound.

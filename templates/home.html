@@ -3,6 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <title>URL Shortener</title>
+  <style>
+    body { margin: 0; padding-bottom: 30px; }
+    .footer {
+      position: fixed;
+      right: 10px;
+      bottom: 5px;
+      font-size: 0.75rem;
+      color: #555;
+    }
+  </style>
 </head>
 <body>
   <h1>URL‑Shortener</h1>
@@ -28,5 +38,7 @@
       <a href="{{ .ShortURL }}">{{ .ShortURL }}</a>
     </p>
   {{ end }}
+
+  <div class="footer">This small project was created specifically for T-Academy</div>
 </body>
 </html>

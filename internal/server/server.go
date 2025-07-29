@@ -9,7 +9,7 @@ import (
 
 // URLShortener описывает сервис для работы с URL.
 type URLShortener interface {
-	CreateShortURL(originalURL, mail string) (string, error)
+	CreateShortURL(originalURL string) (string, error)
 	GetOriginalURL(alias string) (string, error)
 }
 
@@ -77,7 +77,7 @@ func (s *Server) handleShortenURL() http.HandlerFunc {
 		}
 
 		// TODO: Пока передаем пустой email. В будущем здесь будет логика аутентификации.
-		alias, err := s.service.CreateShortURL(longURL, "")
+		alias, err := s.service.CreateShortURL(longURL)
 		if err != nil {
 			slog.Error("failed to create short url", "error", err)
 			http.Error(w, "Failed to create short URL", http.StatusInternalServerError)
