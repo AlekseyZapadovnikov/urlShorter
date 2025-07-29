@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>URL Shortener</title>
+</head>
+<body>
+  <h1>URL‑Shortener</h1>
+
+  <form action="/shorten" method="post">
+    <p>
+      <label>
+        Ваш e‑mail:<br>
+        <input name="mail" type="email" placeholder="email@example.com" required>
+      </label>
+    </p>
+    <p>
+      <label>
+        Длинный URL:<br>
+        <input name="url" type="url" placeholder="https://..." required size="50">
+      </label>
+    </p>
+    <button type="submit">Сократить</button>
+  </form>
+
+  {{ if .ShortURL }}
+    <p>Ваша короткая ссылка: 
+      <a href="{{ .ShortURL }}">{{ .ShortURL }}</a>
+    </p>
+  {{ end }}
+</body>
+</html>

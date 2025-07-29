@@ -1,13 +1,12 @@
 package main
 
 import (
-	"context"
-	"os"
-	"fmt"
 	"io"
-	"log"
 	"log/slog"
+	"os"
 	"url-shorter/internal/config"
+	"url-shorter/internal/server"
+	"url-shorter/internal/service"
 	"url-shorter/internal/store"
 )
 
@@ -21,36 +20,34 @@ const (
 func main() {
     // Загружаем конфиг (возьмёт настройки из env или default)
     cfg := config.MustLoad()
+	servConf := cfg.HTTPServer
+
+	logger := setupLogger(cfg.Env)
+	logger.Info("logger is settup")
 
     // Подключаемся к БД
     db, err := store.NewDBConnection(&cfg.Storage)
     if err != nil {
-        log.Fatalf("Connection error: %v", err)
+        logger.Error("Failed to connect to database", "error", err)
+		return
     }
     defer db.Close()
+	logger.Info("Successfully connected to database", "storage", cfg.Storage)
 
-    ctx := context.Background()
-
-
-
-
-
-
-
-    // 7) GiveShortUrl non-existing
-    fmt.Print("Test GiveShortUrl non-existing: ")
-    _, err = db.GiveShortUrl(ctx, "https://unknown.com")
-    if err == store.ErrShortURLNotFound {
-        fmt.Println("OK (got ErrShortURLNotFound)")
-    } else if err != nil {
-        fmt.Println("FAIL (unexpected error):", err)
-    } else {
-        fmt.Println("FAIL (expected ErrShortURLNotFound)")
-    }
+	shortService := service.NewShortenerService(db, db)
+	// ... я не знаю как это произошло, я был уверен, что интерфес StoreUrl действительно нужен
+	logger.Info("shortener-Service was successfuly created")
+	
+	logger.Info("Trying to connect to server")
+	server := server.New(servConf.Address, shortService)
+	server.Start()
+	// if err := server.Start(); err != nil {
+	// 	logger.Info("An error occurred while starting the server", "error", err)
+	// }
+	logger.Info("server started successfully on", "adres", servConf.Address)
 }
 
 
-// doubleNewlineWriter добавляет дополнительную пустую строку после каждой записи лога.
 type doubleNewlineWriter struct {
 	w io.Writer
 }

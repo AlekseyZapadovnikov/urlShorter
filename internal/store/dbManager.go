@@ -11,11 +11,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type dbManager struct {
+type DbManager struct {
 	conn *pgx.Conn
 }
 
-func NewDBConnection(cfg *config.Storage) (*dbManager, error) {
+func NewDBConnection(cfg *config.Storage) (*DbManager, error) {
 	connStr := fmt.Sprintf(
 		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
 		cfg.DBUser,
@@ -31,17 +31,17 @@ func NewDBConnection(cfg *config.Storage) (*dbManager, error) {
 		return nil, fmt.Errorf("unable to connect to database: %w", err) // обернули ошибку
 	}
 
-	return &dbManager{conn: conn}, nil
+	return &DbManager{conn: conn}, nil
 }
 
-func (db *dbManager) Close() error {
+func (db *DbManager) Close() error {
 	if db.conn != nil {
 		return db.conn.Close(context.Background())
 	}
 	return nil
 }
 
-func (db *dbManager) AddUser(ctx context.Context, mail, password string) error {
+func (db *DbManager) SaveUser(ctx context.Context, mail, password string) error {
 	query := `
         INSERT INTO users (mail, password, created_at)
         VALUES ($1, $2, NOW())
@@ -56,7 +56,7 @@ func (db *dbManager) AddUser(ctx context.Context, mail, password string) error {
 	return nil
 }
 
-func (db *dbManager) AddUrl(ctx context.Context, shortCode, longUrl, mail string) (int64, error) {
+func (db *DbManager) SaveUrl(ctx context.Context, shortCode, longUrl, mail string) (int64, error) {
 	query := `
         INSERT INTO urls (short_code, original_url, user_mail, created_at)
         VALUES ($1, $2, $3, NOW())
@@ -78,7 +78,59 @@ func (db *dbManager) AddUrl(ctx context.Context, shortCode, longUrl, mail string
 	return id, nil
 }
 
-func (db *dbManager) GiveShortUrl(ctx context.Context, longUrl string) (string, error) {
+// GetURL возвращает original_url из таблицы urls по переданному short_code.
+// Если записи с таким alias нет — возвращает ErrShortURLNotFound.
+func (db *DbManager) GetUrl(ctx context.Context, alias string) (string, error) {
+	const query = `
+        SELECT original_url
+          FROM urls
+         WHERE short_code = $1
+    `
+	var longURL string
+	err := db.conn.QueryRow(ctx, query, alias).Scan(&longURL)
+	if err != nil {
+		// Если в БД нет строки с таким short_code
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrShortURLNotFound
+		}
+		// Все прочие ошибки отдаем дальше
+		return "", fmt.Errorf("error while getting original URL: %w", err)
+	}
+	return longURL, nil
+}
+
+// SaveAlias обновляет короткий код (short_code) для уже существующего original_url.
+// Если такого original_url нет — возвращает ErrShortURLNotFound.
+// Если новый alias уже занят — возвращает ErrShortURLExists.
+func (db *DbManager) SaveAlias(ctx context.Context, alias, longURL string) error {
+	const query = `
+        UPDATE urls
+           SET short_code = $1
+         WHERE original_url = $2
+    `
+
+	// Выполняем UPDATE
+	cmd, err := db.conn.Exec(ctx, query, alias, longURL)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Code {
+			case pgerr.UniqueViolation:
+				return ErrShortURLExists
+			}
+		}
+		return fmt.Errorf("error while updating alias: %w", err)
+	}
+
+	// Если не затронулось ни одной строки — такого longURL нет
+	if cmd.RowsAffected() == 0 {
+		return ErrShortURLNotFound
+	}
+
+	return nil
+}
+
+func (db *DbManager) GetAlias(ctx context.Context, longUrl string) (string, error) {
 	query := `
         SELECT short_code FROM urls
         WHERE original_url = $1
@@ -94,3 +146,10 @@ func (db *dbManager) GiveShortUrl(ctx context.Context, longUrl string) (string, 
 	}
 	return shortUrl, nil
 }
+
+
+// после написания пакета service я понимаю, что вот это - 
+// "func (db *DbManager) SaveUrl(ctx context.Context, shortCode, longUrl, mail string) (int64, error) {"
+// это просто глупость, во-первых, singlResp, если SaveUrl, оно должно saveUrl, а не Url и mail,
+// это сильно ухудшило читаемость кода в пакете service, где пришлось везде за собой тоскать этот mail, и я подозреваю, что ещё
+// придётся, если у меня будет время, то я перепишу всё по-нормальному
