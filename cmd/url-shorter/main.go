@@ -16,37 +16,35 @@ const (
 	envProd  = "prod"
 )
 
-
 func main() {
-    // Загружаем конфиг (возьмёт настройки из env или default)
-    cfg := config.MustLoad()
+
+	cfg := config.MustLoad()
 	servConf := cfg.HTTPServer
 
 	logger := setupLogger(cfg.Env)
 	logger.Info("logger is settuped")
 
-    // Подключаемся к БД
-    db, err := store.NewDBConnection(&cfg.Storage)
-    if err != nil {
-        logger.Error("Failed to connect to database", "error", err)
+	// Подключаемся к БД
+	db, err := store.NewDBConnection(&cfg.Storage)
+	if err != nil {
+		logger.Error("Failed to connect to database", "error", err)
 		return
-    }
-    defer db.Close()
+	}
+	defer db.Close()
 	logger.Info("Successfully connected to database", "storage", cfg.Storage)
 
-	shortService := service.NewShortenerService(db, db)
-	// ... я не знаю как это произошло, я был уверен, что интерфес StoreUrl действительно нужен
+	shortService := service.NewShortenerService(db)
+	userService := service.NewUserService(db)
 	logger.Info("shortener-Service was successfuly created")
-	
+
 	logger.Info("Trying to connect to server")
 
-	server := server.New(servConf.Address, shortService)
+	server := server.New(servConf.Address, shortService, userService)
 	if err := server.Start(); err != nil {
 		logger.Info("An error occurred while starting the server", "error", err)
 	}
-	logger.Info("server started successfully on", "adres", servConf.Address)
+	logger.Info("server started successfully on", "address", servConf.Address)
 }
-
 
 type doubleNewlineWriter struct {
 	w io.Writer

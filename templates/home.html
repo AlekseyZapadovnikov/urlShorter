@@ -1,29 +1,50 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
   <meta charset="UTF-8">
   <title>URL Shortener</title>
   <style>
-    body { margin: 0; padding-bottom: 30px; }
+    body {
+      margin: 0;
+      padding-bottom: 50px;
+      font-family: sans-serif;
+    }
+
     .footer {
       position: fixed;
       right: 10px;
       bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
       font-size: 0.75rem;
       color: #555;
     }
+
+    .footer img {
+      width: 24px;
+      height: 24px;
+    }
+
+    .result {
+      margin-top: 20px;
+    }
+
+    .copy-btn {
+      margin-left: 10px;
+      padding: 4px 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
   </style>
 </head>
+
 <body>
-  <h1>URL‑Shortener</h1>
+  <h1>URL-Shortener</h1>
 
   <form action="/shorten" method="post">
-    <p>
-      <label>
-        Ваш e‑mail:<br>
-        <input name="mail" type="email" placeholder="email@example.com" required>
-      </label>
-    </p>
+    <!-- Убрали ввод e-mail -->
     <p>
       <label>
         Длинный URL:<br>
@@ -34,11 +55,38 @@
   </form>
 
   {{ if .ShortURL }}
-    <p>Ваша короткая ссылка: 
-      <a href="{{ .ShortURL }}">{{ .ShortURL }}</a>
-    </p>
+  <div class="result">
+    <span>Ваша короткая ссылка:</span>
+    <a id="short-link" href="{{ .ShortURL }}">{{ .ShortURL }}</a>
+    <button id="copy-btn" type="button" class="copy-btn" onclick="copyLink(this)">Скопировать</button>
+  </div>
   {{ end }}
 
-  <div class="footer">This small project was created specifically for T-Academy</div>
+  <div class="footer">
+    <span>This small project was created especially for T-Academy</span>
+    <img src="/static/images/ta-logo.png" alt="T-Academy Logo">
+  </div>
+
+  <script>
+    function copyLink(btn) {
+      const linkText = document.getElementById('short-link').textContent;
+      const tmp = document.createElement('textarea');
+      tmp.value = linkText;
+      document.body.appendChild(tmp);
+      tmp.select();
+      tmp.setSelectionRange(0, 99999);
+      document.execCommand('copy');
+      document.body.removeChild(tmp);
+
+      const original = btn.textContent;
+      btn.textContent = 'Скопировано!';
+      btn.disabled = true;
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.disabled = false;
+      }, 2000);
+    }
+  </script>
 </body>
+
 </html>

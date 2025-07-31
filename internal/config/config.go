@@ -53,15 +53,14 @@ func MustLoad() *Config {
 		log.Fatalf("error reading config file: %v", err)
 	}
 
-	
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		log.Fatalf("failed to parse config JSON: %v", err)
 	}
 
 	if pass, exists := os.LookupEnv("DB_PASSWORD"); exists {
-        cfg.Storage.DBPassword = pass
-    } else {
+		cfg.Storage.DBPassword = pass
+	} else {
 		if cfg.Env == "local" {
 			cfg.Storage.DBPassword = "123"
 		} else {
@@ -71,5 +70,3 @@ func MustLoad() *Config {
 
 	return &cfg
 }
-
-

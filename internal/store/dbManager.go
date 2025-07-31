@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 	"url-shorter/internal/config"
+
+	"github.com/google/uuid"
 
 	pgerr "github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
@@ -29,7 +32,7 @@ func NewDBConnection(cfg *config.Storage) (*DbManager, error) {
 	conn, err := pgx.Connect(context.Background(), connStr)
 
 	if err != nil {
-		return nil, fmt.Errorf("unable to connect to database: %w", err) // обернули ошибку
+		return nil, fmt.Errorf("unable to connect to database: %w", err)
 	}
 
 	return &DbManager{conn: conn}, nil
@@ -57,33 +60,59 @@ func (db *DbManager) SaveUser(ctx context.Context, mail, password string) error 
 	return nil
 }
 
+func (db *DbManager) GetUserByEmail(ctx context.Context, mail string) (int64, string, error) {
+    var id int64
+    var passwordHash string
+    query := `SELECT id, password FROM users WHERE mail = $1`
+    err := db.conn.QueryRow(ctx, query, mail).Scan(&id, &passwordHash)
+    if err != nil {
+        if errors.Is(err, pgx.ErrNoRows) {
+            return 0, "", ErrUserNotFound
+        }
+        return 0, "", err
+    }
+    return id, passwordHash, nil
+}
+
+func (db *DbManager) GetUserIDBySessionToken(ctx context.Context, token string) (int64, error) {
+	var userID int64
+	query := `SELECT user_id FROM sessions WHERE token = $1 AND expiry > NOW()`
+	err := db.conn.QueryRow(ctx, query, token).Scan(&userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, ErrSessionNotFound
+		}
+		return 0, err
+	}
+	return userID, nil
+}
+
 func (db *DbManager) SaveUrl(ctx context.Context, shortCode, longUrl string) (int64, error) {
-    query := `
+	query := `
       INSERT INTO urls (short_code, original_url, created_at)
       VALUES ($1, $2, NOW())
       RETURNING id
     `
-    var id int64
-    err := db.conn.QueryRow(ctx, query, shortCode, longUrl).Scan(&id)
-    if err != nil {
-        var pgErr *pgconn.PgError
-        if errors.As(err, &pgErr) && pgErr.Code == pgerr.UniqueViolation {
-            return -1, ErrShortURLExists
-        }
-        return -1, fmt.Errorf("error while adding URL: %w", err)
-    }
+	var id int64
+	err := db.conn.QueryRow(ctx, query, shortCode, longUrl).Scan(&id)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerr.UniqueViolation {
+			return -1, ErrShortURLExists
+		}
+		return -1, fmt.Errorf("error while adding URL: %w", err)
+	}
 	slog.Info("url was saved", "url", longUrl, "alias", shortCode)
-    return id, nil
+	return id, nil
 }
-
 
 // GetURL возвращает original_url из таблицы urls по переданному short_code.
 // Если записи с таким alias нет — возвращает ErrShortURLNotFound.
 func (db *DbManager) GetUrl(ctx context.Context, alias string) (string, error) {
 	const query = `
         SELECT original_url
-          FROM urls
-         WHERE short_code = $1
+        FROM urls
+        WHERE short_code = $1
     `
 	var longURL string
 	err := db.conn.QueryRow(ctx, query, alias).Scan(&longURL)
@@ -146,9 +175,21 @@ func (db *DbManager) GetAlias(ctx context.Context, longUrl string) (string, erro
 	return shortUrl, nil
 }
 
+func (db *DbManager) CreateSession(ctx context.Context, userID int64) (string, error) {
+	token := uuid.New().String()             // Генерируем случайный токен (uuid)
+	expiry := time.Now().Add(24 * time.Hour) // Сессия на 24 часа
 
-// после написания пакета service я понимаю, что вот это - 
-// "func (db *DbManager) SaveUrl(ctx context.Context, shortCode, longUrl, mail string) (int64, error) {"
-// это просто глупость, во-первых, singlResp, если SaveUrl, оно должно saveUrl, а не Url и mail,
-// это сильно ухудшило читаемость кода в пакете service, где пришлось везде за собой тоскать этот mail, и я подозреваю, что ещё
-// придётся, если у меня будет время, то я перепишу всё по-нормальному
+	query := `INSERT INTO sessions (token, user_id, expiry) VALUES ($1, $2, $3)`
+	_, err := db.conn.Exec(ctx, query, token, userID, expiry)
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+func (db *DbManager) DeleteSession(ctx context.Context, token string) error {
+	query := `DELETE FROM sessions WHERE token = $1`
+	_, err := db.conn.Exec(ctx, query, token)
+	return err
+}
+
